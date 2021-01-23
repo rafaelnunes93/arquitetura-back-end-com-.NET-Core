@@ -1,4 +1,6 @@
 ﻿using curso.api.Business.Entities;
+using curso.api.Business.Repositories;
+using curso.api.Configurations;
 using curso.api.Filters;
 using curso.api.InfraEstruture.Data;
 using curso.api.Models;
@@ -6,6 +8,7 @@ using curso.api.Models.Usuarios;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using Swashbuckle.AspNetCore.Annotations;
 using System;
@@ -22,6 +25,19 @@ namespace curso.api.Controllers
     [ApiController]
     public class UsuarioController : ControllerBase
     {
+
+        private readonly IUsuarioRepository _usuarioRepository;
+        private readonly IAutheiticationService _autheitication;
+
+
+        public UsuarioController(IUsuarioRepository usuarioRepository,
+            IAutheiticationService autheitication
+            )
+        {
+            _usuarioRepository = usuarioRepository;
+            _autheitication = autheitication;
+        }
+
         [SwaggerResponse(statusCode:200,description:"Sucesso ao autenticar",Type = typeof(LoginViewModelInput))]
         [SwaggerResponse(statusCode:400,description:"Campos Obrigatorios", Type = typeof(ValidaCampoViewModelOutput))]
         [SwaggerResponse(statusCode:500,description:"Erro Interno", Type = typeof(ErroGenericoViewModel))]
@@ -30,33 +46,23 @@ namespace curso.api.Controllers
         [ValidacaoModelStateCustomizado]
         public IActionResult Logar(LoginViewModelInput loginViewModelInput )
         {
+            var usuario = _usuarioRepository.ObterUsuario(loginViewModelInput.Login);
+
+           if(usuario == null)
+            {
+                return BadRequest("Houve um erro ao tentar acessar");
+            }
+
             var usuarioViewModelOutput = new UsuarioViewModelOutput()
             {
-                Codigo = 1,
-                Login = "RafaelNunes",
-                Email = "Rafaelnunes@gmail.com"
+                Codigo = usuario.Codigo,
+                Login = usuario.Login,
+                Email = usuario.Email
             };
 
-            var secret = Encoding.ASCII.GetBytes("MinhaChaveSuperSecreta");
-            var symmetricSecurityKey = new SymmetricSecurityKey(secret);
-            var securitytokenDescriptor = new SecurityTokenDescriptor
-            {
-                Subject = new ClaimsIdentity(new Claim[]
-                {
-                    new Claim(ClaimTypes.NameIdentifier, usuarioViewModelOutput.Codigo.ToString()),
-                    new Claim(ClaimTypes.Name, usuarioViewModelOutput.Login.ToString()),
-                    new Claim(ClaimTypes.Email, usuarioViewModelOutput.Email.ToString())
-                }),
-                Expires = DateTime.UtcNow.AddHours(2),
-                SigningCredentials = new SigningCredentials(symmetricSecurityKey, SecurityAlgorithms.HmacSha256Signature)
-            };
-             
-            var jwtSecuritytokenHandler = new JwtSecurityTokenHandler();
-            var tokenGenerated = jwtSecuritytokenHandler.CreateToken(securitytokenDescriptor);
-            var token = jwtSecuritytokenHandler.WriteToken(tokenGenerated);
+            var token = _autheitication.GerarToken(usuarioViewModelOutput);
 
-            return Ok(new
-            { 
+            return Ok(new { 
                 Token = token,
                 Usuario = usuarioViewModelOutput
             });
@@ -67,24 +73,20 @@ namespace curso.api.Controllers
         [ValidacaoModelStateCustomizado]
         public IActionResult Registrar(RegistroViewModelInput loginViewModelInput)
         {
-            var optionsBuilder = new DbContextOptionsBuilder<CursoDbContext>();
-            optionsBuilder.UseSqlServer("Server = (localdb)\\mssqllocaldb; Database = Cursomvc; Integrated Security = True");
-            CursoDbContext contexto = new CursoDbContext(optionsBuilder.Options);
+                       
 
-            var migracoesPendentes = contexto.Database.GetPendingMigrations();
+            //var migracoesPendentes = contexto.Database.GetPendingMigrations();
 
-            if(migracoesPendentes.Count() > 0)
-            {
-                contexto.Database.Migrate();
-            }
+         
 
             var usuario = new Usuario();    
 
             usuario.Login = loginViewModelInput.Login;
             usuario.Senha = loginViewModelInput.Senha;
             usuario.Email = loginViewModelInput.Email;
-            contexto.Usuario.Add(usuario);
-            contexto.SaveChanges();
+           
+            _usuarioRepository.Adicionar(usuario);
+            _usuarioRepository.Commit();
 
             return Created("", loginViewModelInput);
         }

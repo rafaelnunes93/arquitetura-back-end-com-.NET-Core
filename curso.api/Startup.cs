@@ -1,8 +1,13 @@
- using Microsoft.AspNetCore.Authentication.JwtBearer;
+using curso.api.Business.Repositories;
+using curso.api.Configurations;
+using curso.api.InfraEstruture.Data;
+using curso.api.InfraEstruture.Data.Repositories;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -69,25 +74,13 @@ namespace curso.api
                 c.IncludeXmlComments(xmlPath);
             });
 
-            var Secret = Encoding.ASCII.GetBytes(Configuration.GetSection("JwtConfigurations:Secret").Value);
-            services.AddAuthentication(x =>
-            {
-                x.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-                x.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-            })
-            .AddJwtBearer(x =>
-            {
-                x.RequireHttpsMetadata = false;
-                x.SaveToken = true;
-                x.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Secret),
-                    ValidateIssuer = false,
-                    ValidateAudience = false
-                };
+           
+            services.AddDbContext<CursoDbContext>( options => {
+                options.UseSqlServer(Configuration.GetConnectionString("DefeautConnection"));
             });
-
+            services.AddScoped<IUsuarioRepository, UsuarioRepository>();
+            services.AddScoped<ICursoRepository, CursoRepository>();
+            services.AddScoped<IAutheiticationService, JWTService>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

@@ -1,4 +1,6 @@
-﻿using curso.api.Models.Cursos;
+﻿using curso.api.Business.Entities;
+using curso.api.Business.Repositories;
+using curso.api.Models.Cursos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -16,7 +18,13 @@ namespace curso.api.Controllers
     [Route("api/v1/cursos")]
     [ApiController]
     public class CursoController : ControllerBase
-     { 
+     {
+        private readonly ICursoRepository _cursoRepository;
+
+        public CursoController(ICursoRepository cursoRepository)
+        {
+            _cursoRepository = cursoRepository;
+        }
 
         [SwaggerResponse(statusCode: 201, description: "Sucesso ao Cadastrar um curso")]
         [SwaggerResponse(statusCode: 401, description: "Não Autorizado")]
@@ -24,10 +32,16 @@ namespace curso.api.Controllers
         [Route("")]
         [Authorize]
         public async Task<IActionResult> Post(CursoViewModelInput cursoViewModelInput)
-        { 
+        {
+
+            Curso curso = new Curso();
+            curso.Nome = cursoViewModelInput.Nome;
+            curso.Desricao = cursoViewModelInput.Descriao;       
 
             var codigoUsuario = int.Parse(User.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value);
-
+            curso.Codigo = codigoUsuario;
+            _cursoRepository.adicionar(curso);
+            _cursoRepository.Commit();
             return Created("", cursoViewModelInput);
         }
 
@@ -38,14 +52,18 @@ namespace curso.api.Controllers
         public async Task<IActionResult> Get()
         {
 
-            var cursos = new List<CursoViewModelOutput>();
             var codigoUsuario = int.Parse(User.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value);
 
-            cursos.Add(new CursoViewModelOutput() {
-                Login = codigoUsuario.ToString(),
-                Descricao = "teste",
-                Nome = "teste"
-            });
+            var cursos = _cursoRepository.ObterPorUsuario(codigoUsuario)
+                .Select(s => new CursoViewModelOutput()
+                {
+                    Nome = s.Nome,
+                    Descricao = s.Desricao,
+                    Login = s.Usuario.Login
+                });
+
+
+        
 
             return Ok(cursos);
         }
